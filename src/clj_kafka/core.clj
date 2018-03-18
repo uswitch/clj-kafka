@@ -8,12 +8,12 @@
 
 (defrecord KafkaMessage [topic offset partition key value])
 
+;; Not needed anymore? Producer uses java.util.map == clojure map
 (defn as-properties
   [m]
-  (let [props (Properties. )]
-    (doseq [[n v] m] (.setProperty props n v))
-    props))
+  (doto (Properties.) (.putAll m)))
 
+;; Needed? can just use with-open ?
 (defmacro with-resource
   [binding close-fn & body]
   `(let ~binding

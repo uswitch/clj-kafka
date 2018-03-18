@@ -4,7 +4,8 @@ Clojure library for [Kafka](https://kafka.apache.org).
 
 Current build status: [![Build Status](https://travis-ci.org/pingles/clj-kafka.png)](https://travis-ci.org/pingles/clj-kafka)
 
-Development is against the 0.8 release of Kafka.
+Development is against the 1.0 release of Kafka, and will only work with brokers 0.10.0 or newer! Support for older versions has been dropped.
+For older versions than 1.0, not all functionality may work and it is advised to read the documentation.
 
 ## Installing
 
@@ -20,32 +21,23 @@ Discovery of Kafka brokers from Zookeeper:
 
 ```clj
 (brokers {"zookeeper.connect" "127.0.0.1:2181"})
-;; ({:host "localhost", :jmx_port -1, :port 9999, :version 1})
+;; ({:host "localhost", :jmx_port -1, :port 9092, :version 1})
 ```
 
 ```clj
 (use 'clj-kafka.producer)
+(require '[clj-kafka.serialization :as s])
 
-(def p (producer {"metadata.broker.list" "localhost:9999"
-                  "serializer.class" "kafka.serializer.DefaultEncoder"
-                  "partitioner.class" "kafka.producer.DefaultPartitioner"}))
+(def config {"bootstrap.servers" "localhost:9092"
+             "key.serializer"    "org.apache.kafka.common.serialization.StringSerializer"
+             "value.serializer"  "org.apache.kafka.common.serialization.StringSerializer" })
 
-(send-message p (message "test" (.getBytes "this is my message")))
-```
+(with-open [p (producer config)]
+  (send p (record "test-topic" "hello world!")))
 
-See: [clj-kafka.producer](https://pingles.github.io/clj-kafka/clj-kafka.producer.html)
+(def byte-array-serializer (s/serializer s/bytearray))
 
-
-### New Producer
-
-As of 0.3.1 we also support the "new" pure-Java producer. The
-interface is superficially similar but we've chosen to keep names
-close to their Java equivalent.
-
-```clj
-(use 'clj-kafka.new.producer)
-
-(with-open [p (producer {"bootstrap.servers" "127.0.0.1:9092"} (byte-array-serializer) (byte-array-serializer))]
+(with-open [p (producer config byte-array-serializer byte-array-serializer]
   (send p (record "test-topic" (.getBytes "hello world!"))))
 ```
 
@@ -54,45 +46,36 @@ returns a `Future` immediately. If you want synchronous behaviour
 you can deref it right away:
 
 ```clj
-(with-open [p (producer {"bootstrap.servers" "127.0.0.1:9092"} (byte-array-serializer) (byte-array-serializer))]
-  @(send p (record "test-topic" (.getBytes "hello world!"))))
+(with-open [p (producer config)]
+  @(send p (record "test-topic" "hello world!")))
 ```
 
 See: [clj-kafka.new.producer](https://pingles.github.io/clj-kafka/clj-kafka.new.producer.html)
 
 
-### Zookeeper Consumer
+### Consumer
 
 The Zookeeper consumer uses broker information contained within
 Zookeeper to consume messages. This consumer also allows the client to
 automatically commit consumed offsets so they're not retrieved again.
 
 ```clj
-(use 'clj-kafka.consumer.zk)
-(use 'clj-kafka.core)
+(use 'clj-kafka.consumer)
 
-(def config {"zookeeper.connect" "localhost:2182"
-             "group.id" "clj-kafka.consumer"
-             "auto.offset.reset" "smallest"
-             "auto.commit.enable" "false"})
+(def config {"bootstrap.servers" "localhost:9092"
+             "key.deserializer" "org.apache.kafka.common.serialization.StringDeserializer"
+             "value.deserializer" "org.apache.kafka.common.serialization.StringDeserializer"
+             "group.id" "clj-kafka.consumer1"
+             "auto.offset.reset" "earliest"
+             "enable.auto.commit" "false"})
 
-(with-resource [c (consumer config)]
-  shutdown
-  (take 2 (messages c "test")))
+(with-open [c (consumer config ["topic1"])]
+  (records c))
 ```
-
-The `messages` function provides the easy-case of single topic and single thread consumption. This
-is a stricter form of the same API that was in earlier releases. `messages` is built on two key
-other functions: `create-message-streams` and `stream-seq` that create the underlying streams and
-turn them into lazy sequences respectively; this change makes it easier to consume across multiple
-partitions and threads.
-
-See: [clj-kafka.consumer.zk](https://pingles.github.io/clj-kafka/clj-kafka.consumer.zk.html)
 
 #### Usage with transducers
 
-An alternate way of consuming is using `create-message-stream` or
-`create-message-streams` to obtain `KafkaStream` instances. These are
+An alternate way of consuming is using `records-seq`. These are
 `Iterable` which means, amongst other things, that they work nicely
 with transducers.
 
@@ -104,9 +87,8 @@ Continuing previous example:
                  (filter production-traffic)
                  (map parse-user-agent-string)))
 
-(with-resource [c (consumer config)]
-  shutdown
-  (let [stream (create-message-stream c "test-topic")]
+(with-open [c (consumer config ["test-topic"])]
+  (let [stream (records-seq c)]
     (run! write-to-database! (eduction xform stream))))
 ```
 
