@@ -3,6 +3,7 @@
            https://kafka.apache.org/10/javadoc/index.html?org/apache/kafka/clients/producer/KafkaProducer.html "}
   clj-kafka.producer
   (:refer-clojure :exclude [send])
+  (:require [clj-kafka.core :refer [to-clojure]])
   (:import [java.util.concurrent Future TimeUnit TimeoutException]
            [org.apache.kafka.clients.producer Callback KafkaProducer ProducerRecord RecordMetadata]
            [org.apache.kafka.common.serialization Serializer]))
@@ -30,19 +31,13 @@
   ([topic partition key value]
    (ProducerRecord. topic partition key value)))
 
-(defn- record-metadata->map
-  [^RecordMetadata m]
-  {:topic (.topic m)
-   :partition (.partition m)
-   :offset (.offset m)})
-
 (defn- map-future-val
-  [^Future fut f]
+  [^Future fut]
   (reify
     java.util.concurrent.Future
     (cancel [_ interrupt?] (.cancel fut interrupt?))
-    (get [_] (f (.get fut)))
-    (get [_ timeout unit] (f (.get fut timeout unit)))
+    (get [_] (to-clojure (.get fut)))
+    (get [_ timeout unit] (to-clojure (.get fut timeout unit)))
     (isCancelled [_] (.isCancelled fut))
     (isDone [_] (.isDone fut))))
 
@@ -56,9 +51,9 @@
   For details on behaviour, see http://kafka.apache.org/082/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html#send(org.apache.kafka.clients.producer.ProducerRecord,org.apache.kafka.clients.producer.Callback)"
   ([^KafkaProducer producer record]
    (let [fut (.send producer record)]
-     (map-future-val fut record-metadata->map)))
+     (map-future-val fut)))
   ([^KafkaProducer producer record callback]
    (let [fut (.send producer record (reify Callback
                                       (onCompletion [_ metadata exception]
-                                        (callback (and metadata (record-metadata->map metadata)) exception))))]
-     (map-future-val fut record-metadata->map))))
+                                        (callback (and metadata (to-clojure metadata)) exception))))]
+     (map-future-val fut))))

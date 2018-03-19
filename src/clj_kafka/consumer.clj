@@ -1,4 +1,5 @@
 (ns clj-kafka.consumer
+  (:require [clj-kafka.core :refer [to-clojure map-to-clojure]])
   (:import [org.apache.kafka.clients.consumer Consumer KafkaConsumer ConsumerRecord OffsetAndMetadata]
            [org.apache.kafka.common.serialization Deserializer]
            [org.apache.kafka.common TopicPartition]))
@@ -11,28 +12,17 @@
    (doto (KafkaConsumer. config key-deserializer value-deserializer)
      (.subscribe topics))))
 
-(defn- to-record [^ConsumerRecord r]
-  {:headers    (.headers r)
-   :timestamp  (.timestamp r)
-   :topic      (.topic r)
-   :partition  (.partition r)
-   :offset     (.offset r)
-   :key-size   (.serializedKeySize r)
-   :value-size (.serializedValueSize r)
-   :key        (.key r)
-   :value      (.value r) })
-
 (defn partition-records [^Consumer consumer]
   (let [records (.poll consumer Long/MAX_VALUE)]
     (for [partition (.partitions records)
           record (.records records partition)]
-      (to-record record))))
+      (to-clojure record))))
 
 (defn records
   [^Consumer consumer timeout-ms]
   (as-> consumer x
         (.poll x timeout-ms)
-        (map to-record x)))
+        (map to-clojure x)))
 
 (defn records-seq
   [^Consumer consumer]
@@ -46,8 +36,6 @@
   ([^Consumer c {:keys [topic partition offset]}]
    (.commitSync c (TopicPartition. topic partition) (OffsetAndMetaData. offset))))
 
-(defn seek [^Consumer c topic partition offset]
-  (.seek c (TopicPartition. topic partition) offset))
-
 (defn list-topics [^Consumer c]
-  (.listTopics c))
+  (map-to-clojure (.listTopics c)))
+

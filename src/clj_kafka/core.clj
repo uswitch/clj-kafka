@@ -1,83 +1,84 @@
 (ns clj-kafka.core
-  (:import [java.nio ByteBuffer]
-           [java.util Properties]
-           [kafka.message MessageAndMetadata MessageAndOffset]
-           [kafka.javaapi PartitionMetadata TopicMetadata TopicMetadataResponse ConsumerMetadataResponse OffsetFetchResponse OffsetCommitResponse]
-           [kafka.cluster Broker]
-           ))
-
-(defrecord KafkaMessage [topic offset partition key value])
-
-;; Not needed anymore? Producer uses java.util.map == clojure map
-(defn as-properties
-  [m]
-  (doto (Properties.) (.putAll m)))
-
-;; Needed? can just use with-open ?
-(defmacro with-resource
-  [binding close-fn & body]
-  `(let ~binding
-     (try
-       (do ~@body)
-       (finally
-        (~close-fn ~(binding 0))))))
+  (:import [org.apache.kafka.clients.consumer ConsumerRecord OffsetAndMetadata OffsetAndTimestamp]
+           [org.apache.kafka.clients.producer RecordMetadata]
+           [org.apache.kafka.common TopicPartition MetricName Node]))
 
 (defprotocol ToClojure
   (to-clojure [x] "Converts type to Clojure structure"))
 
 (extend-protocol ToClojure
-  nil
-  (to-clojure [x] nil)
+  nil (to-clojure [x] nil)
+  String (to-clojure [x] x)
+  Integer (to-clojure [x] x)
+  Long (to-clojure [x] x)
+  Short (to-clojure [x] x)
 
-  MessageAndMetadata
-  (to-clojure [x] (KafkaMessage. (.topic x) (.offset x) (.partition x) (.key x) (.message x)))
-
-  MessageAndOffset
+  Node
   (to-clojure [x]
-    (letfn [(byte-buffer-bytes [^ByteBuffer bb] (let [b (byte-array (.remaining bb))]
-                                      (.get bb b)
-                                      b))]
-      (let [offset (.offset x)
-            msg (.message x)]
-        (KafkaMessage. nil offset nil (.key msg) (byte-buffer-bytes (.payload msg))))))
-
-  Broker
-  (to-clojure [x]
-    {:connect (.connectionString x)
+    {:id (.id x)
+     :id-string (.idString x)
      :host (.host x)
      :port (.port x)
-     :broker-id (.id x)})
+     :rack (.rack x)
+     :no-node (-> x .noNode to-clojure)
+     :is-empty (.isEmpty x)
+     :has-rack (.hasRack x) })
 
-  PartitionMetadata
+  PartitionInfo
   (to-clojure [x]
-    {:partition-id (.partitionId x)
-     :leader (to-clojure (.leader x))
-     :replicas (map to-clojure (.replicas x))
-     :in-sync-replicas (map to-clojure (.isr x))
-     :error-code (.errorCode x)})
+    {:topic            (.topic x)
+     :partition        (.partition x)
+     :replicas         (->> x .replicas (map to-clojure))
+     :insync-replicas  (->> x .inSyncReplicas (map to-clojure))
+     :offline-replicas (->> x .offlineReplicas (map to-clojure))
+     :leader           (-> x .leader to-clojure) })
 
-  TopicMetadata
+  Metric
   (to-clojure [x]
-    {:topic (.topic x)
-     :partition-metadata (map to-clojure (.partitionsMetadata x))})
+    {:name (.metricName x)
+      :value (.metricValue x) })
 
-  TopicMetadataResponse
+  MetricName
   (to-clojure [x]
-    (map to-clojure (.topicsMetadata x)))
+    {:name (.name x)
+     :description (.description x)
+     :group (.group x)
+     :tags (.tags x) })
 
-  OffsetFetchResponse
+  ConsumerRecord
   (to-clojure [x]
-    (into {} (for [[k v] (.offsets x)] [(str (.topic k) ":" (.partition k)) v])))
+    {:headers    (.headers r)
+     :timestamp  (.timestamp r)
+     :topic      (.topic r)
+     :partition  (.partition r)
+     :offset     (.offset r)
+     :key-size   (.serializedKeySize r)
+     :value-size (.serializedValueSize r)
+     :key        (.key r)
+     :value      (.value r) })
 
-  OffsetCommitResponse
+  RecordMetadata
   (to-clojure [x]
-    (if (.hasError x)
-      {:has-error true
-       :errors (into {} (for [[k v] (.errors x)] [(str (.topic k) ":" (.partition k)) v]))}
-      {:has-error false}))
+  {:topic     (.topic x)
+   :partition (.partition x)
+   :offset    (.offset x)})
 
-  ConsumerMetadataResponse
+  TopicPartition
   (to-clojure [x]
-    {:error-code (.errorCode x)
-     :coordinator (.coordinator x)
-     }))
+    {:topic     (.topic x)
+     :partition (.partition x) })
+
+  OffsetAndMetadata
+  (to-clojure [x]
+    {:offset (.offset x)
+     :metadata (.metadata x) })
+
+  OffsetAndTimestamp
+  (to-clojure [x]
+    {:offset (.offset x)
+     :timestamp (.timestamp x) }) )
+
+(defn map-to-clojure [m]
+  (into {} (for [[k v] m]
+             [(to-clojure k) (to-clojure v)])))
+
