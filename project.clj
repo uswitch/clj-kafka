@@ -1,4 +1,4 @@
-(defproject clj-kafka/clj-kafka "0.4.0"
+(defproject uswitch/clj-kafka "0.4.0-SNAPSHOT"
   :description "Clojure wrapper for Kafka's Java API"
   :min-lein-version "2.5.0"
   :url "https://github.com/pingles/clj-kafka"

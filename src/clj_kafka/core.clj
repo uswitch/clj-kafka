@@ -1,7 +1,7 @@
 (ns clj-kafka.core
   (:import [org.apache.kafka.clients.consumer ConsumerRecord OffsetAndMetadata OffsetAndTimestamp]
            [org.apache.kafka.clients.producer RecordMetadata]
-           [org.apache.kafka.common TopicPartition MetricName Node]))
+           [org.apache.kafka.common TopicPartition PartitionInfo Metric MetricName Node]))
 
 (defprotocol ToClojure
   (to-clojure [x] "Converts type to Clojure structure"))
@@ -47,15 +47,15 @@
 
   ConsumerRecord
   (to-clojure [x]
-    {:headers    (.headers r)
-     :timestamp  (.timestamp r)
-     :topic      (.topic r)
-     :partition  (.partition r)
-     :offset     (.offset r)
-     :key-size   (.serializedKeySize r)
-     :value-size (.serializedValueSize r)
-     :key        (.key r)
-     :value      (.value r) })
+    {:headers    (.headers x)
+     :timestamp  (.timestamp x)
+     :topic      (.topic x)
+     :partition  (.partition x)
+     :offset     (.offset x)
+     :key-size   (.serializedKeySize x)
+     :value-size (.serializedValueSize x)
+     :key        (.key x)
+     :value      (.value x) })
 
   RecordMetadata
   (to-clojure [x]
@@ -76,7 +76,12 @@
   OffsetAndTimestamp
   (to-clojure [x]
     {:offset (.offset x)
-     :timestamp (.timestamp x) }) )
+     :timestamp (.timestamp x) })
+
+  Object
+  (to-clojure [x]
+    (prn "to-clojure OBJECT" (class x))
+    x))
 
 (defn map-to-clojure [m]
   (into {} (for [[k v] m]

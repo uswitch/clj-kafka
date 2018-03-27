@@ -18,10 +18,16 @@
           record (.records records partition)]
       (to-clojure record))))
 
+(defn tap [x]
+  (prn "TAP" x)
+  x
+  )
+
 (defn records
   [^Consumer consumer timeout-ms]
   (as-> consumer x
         (.poll x timeout-ms)
+        (map tap x)
         (map to-clojure x)))
 
 (defn records-seq
@@ -34,7 +40,7 @@
   ([^Consumer c]
   (.commitSync c))
   ([^Consumer c {:keys [topic partition offset]}]
-   (.commitSync c (TopicPartition. topic partition) (OffsetAndMetaData. offset))))
+   (.commitSync c (TopicPartition. topic partition) (OffsetAndMetadata. offset))))
 
 (defn list-topics [^Consumer c]
   (map-to-clojure (.listTopics c)))
