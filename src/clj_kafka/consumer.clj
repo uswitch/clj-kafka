@@ -36,5 +36,9 @@
   ([^Consumer c {:keys [topic partition offset]}]
    (.commitSync c (TopicPartition. topic partition) (OffsetAndMetadata. offset))))
 
+(defn assign
+  [^Consumer c topic partition]
+  (.assign c [(TopicPartition. topic partition)]))
+
 (defn list-topics [^Consumer c]
   (map-to-clojure (.listTopics c)))
